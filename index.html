@@ -1,0 +1,1480 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Rana Calzonuda</title>
+<style>
+  :root {
+    --leaf: #2f9a2a;
+    --leaf-dark: #0f3b2a;
+    --cream: #fff8e6;
+    --ink: #17261a;
+    --red: #e0201b;
+    --blue: #2a5fd0;
+    --orange: #f08a1c;
+    --yellow: #f4cf2a;
+    --good: #3fbf4a;
+    --bad: #e2453a;
+    --panel: rgba(255, 250, 235, 0.96);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #0f3b2a;
+    font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+    color: var(--ink);
+    -webkit-user-select: none; user-select: none;
+  }
+  canvas#game { display: block; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; touch-action: none; cursor: crosshair; }
+
+  /* ---------- HUD ---------- */
+  #hud {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    padding: 10px 16px; pointer-events: none; z-index: 5;
+  }
+  .hud-side { display: flex; flex-direction: column; gap: 6px; min-width: 150px; }
+  .hud-right { align-items: flex-end; }
+  .pill {
+    background: rgba(10, 35, 22, 0.72); color: #f3ffe9;
+    border: 1px solid rgba(255,255,255,0.18);
+    padding: 6px 12px; border-radius: 999px; font-weight: 700; font-size: 15px;
+    backdrop-filter: blur(4px);
+  }
+  #lives { font-size: 18px; letter-spacing: 2px; }
+  #promptCard {
+    background: var(--panel); border-radius: 18px; padding: 8px 26px 10px;
+    text-align: center; box-shadow: 0 6px 22px rgba(0,0,0,0.35);
+    border: 3px solid var(--orange); min-width: 240px; max-width: 520px;
+    transition: transform .15s ease;
+  }
+  #promptCard.pop { transform: scale(1.08); }
+  #promptCard .lbl { font-size: 12px; letter-spacing: 3px; text-transform: uppercase; color: #8a5a12; font-weight: 700; }
+  #promptWord { font-size: 34px; font-weight: 800; line-height: 1.1; color: #12321c; }
+  #promptCard .sub { font-size: 14px; color: #44624a; min-height: 1.3em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #promptCard .sub.good { color: #1d7a22; font-weight: 700; }
+  #promptCard .sub.bad { color: #b3261e; font-weight: 700; }
+  #promptCard .sub b { color: inherit; }
+  .sizebox { display: flex; align-items: center; gap: 8px; }
+  .bar { width: 120px; height: 12px; border-radius: 99px; background: rgba(255,255,255,0.2); overflow: hidden; }
+  #sizeFill { height: 100%; width: 0%; background: linear-gradient(90deg, #8fe34f, #3fbf4a); transition: width .25s; }
+  .hud-btns { display: flex; gap: 6px; pointer-events: auto; }
+  .hud-btns button {
+    pointer-events: auto; font-size: 18px; width: 40px; height: 40px; border-radius: 12px; border: none;
+    background: rgba(10,35,22,0.72); color: white; cursor: pointer;
+  }
+  .hud-btns button:hover { background: rgba(30,80,50,0.9); }
+  .hud-btns #btnStartle { width: auto; padding: 0 12px; font-size: 15px; font-weight: 800; font-family: inherit; background: linear-gradient(#ff9f2e, #e0701a); }
+  .hud-btns #btnStartle.cooling, .hud-btns #btnHint.cooling { background: rgba(10,35,22,0.72); opacity: 0.75; }
+  .hud-btns #btnHint { width: auto; padding: 0 12px; font-size: 15px; font-weight: 800; font-family: inherit; background: linear-gradient(#ffe36b, #e0b81a); color: #3a2a00; }
+
+  #toast {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    top: 120px; z-index: 6; pointer-events: none;
+    background: rgba(10,35,22,0.88); color: #fff; padding: 10px 18px; border-radius: 14px;
+    font-weight: 700; font-size: 17px; opacity: 0; transition: opacity .25s; max-width: 92vw; text-align: center;
+  }
+  #toast.show { opacity: 1; }
+  #toast.good { border: 2px solid var(--good); }
+  #toast.bad { border: 2px solid var(--bad); }
+  #toast b { color: #ffe36b; }
+
+  /* ---------- Overlays ---------- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+    background: rgba(6, 26, 16, 0.55); padding: 16px; overflow-y: auto;
+  }
+  .overlay.hidden { display: none; }
+  .card {
+    background: var(--panel); border-radius: 24px; padding: 22px 26px; max-width: 620px; width: 100%;
+    box-shadow: 0 14px 50px rgba(0,0,0,0.5); border: 4px solid var(--leaf);
+    max-height: calc(100vh - 32px); overflow-y: auto; margin: auto;
+  }
+  .card h1 { margin: 0; font-size: 40px; color: #1d6b22; line-height: 1; }
+  .card h2 { margin: 0 0 6px; font-size: 30px; color: #1d6b22; }
+  .tag { margin: 4px 0 10px; color: #8a5a12; font-weight: 700; }
+  .menu-top { display: flex; gap: 16px; align-items: center; }
+  #frogPreview { width: 150px; height: 120px; flex-shrink: 0; }
+  .section-title { font-weight: 800; margin: 14px 0 6px; font-size: 15px; color: #2b4a30; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    border: 2px solid #9bc59a; background: white; border-radius: 999px; padding: 7px 14px;
+    font-size: 15px; font-weight: 700; cursor: pointer; color: #24432a; font-family: inherit;
+  }
+  .chip.on { background: #2f9a2a; border-color: #2f9a2a; color: white; }
+  textarea {
+    width: 100%; min-height: 110px; margin-top: 8px; border-radius: 12px; border: 2px solid #9bc59a;
+    padding: 10px; font-size: 15px; font-family: inherit; resize: vertical;
+  }
+  .hint { font-size: 13px; color: #5b6f5d; margin-top: 4px; }
+  .btn {
+    display: inline-block; border: none; border-radius: 16px; padding: 13px 28px; font-size: 20px; font-weight: 800;
+    cursor: pointer; font-family: inherit; background: linear-gradient(#ff9f2e, #e0701a); color: white;
+    box-shadow: 0 4px 0 #a64f0e; margin-top: 16px;
+  }
+  .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #a64f0e; }
+  .btn.secondary { background: linear-gradient(#5cc25a, #2f9a2a); box-shadow: 0 4px 0 #1d6b22; }
+  .how { margin: 12px 0 0; padding-left: 20px; font-size: 15px; line-height: 1.45; }
+  .fact { margin-top: 12px; font-size: 13px; color: #4b5f4d; background: #eef7e6; border-radius: 12px; padding: 8px 12px; }
+  .err { color: var(--bad); font-weight: 700; margin-top: 6px; min-height: 1em; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 12px 0; }
+  .stat { background: #eef7e6; border-radius: 14px; padding: 8px; text-align: center; }
+  .stat .v { font-size: 26px; font-weight: 800; color: #1d6b22; }
+  .stat .k { font-size: 12px; color: #4b5f4d; text-transform: uppercase; letter-spacing: 1px; }
+  .review { columns: 2; font-size: 15px; margin: 6px 0 0; padding-left: 18px; }
+  .review li { break-inside: avoid; margin-bottom: 3px; }
+  .center { text-align: center; }
+  .btn-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+  .hud-btns button { white-space: nowrap; }
+  @media (max-width: 960px) {
+    #hud { flex-wrap: wrap; padding: 8px; gap: 6px; }
+    #promptCard { order: -1; flex-basis: 100%; max-width: none; padding: 6px 12px 8px; }
+    #promptWord { font-size: 26px; }
+    .hud-side { min-width: 0; flex-direction: row; align-items: center; flex-wrap: wrap; }
+    .bar { width: 70px; }
+    .pill { font-size: 13px; padding: 5px 10px; }
+    .card h1 { font-size: 30px; }
+    #frogPreview { width: 100px; height: 80px; }
+    .review { columns: 1; }
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud" style="visibility:hidden">
+  <div class="hud-side">
+    <div class="pill" id="lives">❤❤❤</div>
+    <div class="pill">Puntos: <span id="score">0</span></div>
+  </div>
+  <div id="promptCard">
+    <div class="lbl">English</div>
+    <div id="promptWord">—</div>
+    <div class="sub" id="promptSub">Catch the Spanish word with your tongue</div>
+  </div>
+  <div class="hud-side hud-right">
+    <div class="pill sizebox">Seguidas <div class="bar"><div id="sizeFill"></div></div> <span id="streakCount">0/5</span></div>
+    <div class="pill" id="levelPill">Palabras: 0</div>
+    <div class="hud-btns">
+      <button id="btnHint" title="Pista: show a hint (H)">💡 Pista</button>
+      <button id="btnStartle" title="Susto: scare the snake away (Shift, E, or right-click)">😳 ¡Susto!</button>
+      <button id="btnSound" title="Sonido (M)">🔊</button>
+      <button id="btnPause" title="Pausa (P)">⏸</button>
+    </div>
+  </div>
+</div>
+
+<!-- Menu -->
+<div id="menu" class="overlay">
+  <div class="card">
+    <div class="menu-top">
+      <canvas id="frogPreview" width="300" height="240"></canvas>
+      <div>
+        <h1>Rana Calzonuda</h1>
+        <div class="tag">¡A comer palabras! · Comida tica</div>
+      </div>
+    </div>
+
+    <div class="section-title">Vocabulario: 🍲 Comida y expresiones ticas</div>
+    <div class="hint">Costa Rican dishes, drinks and food-based sayings, like <i>gallo pinto</i>, <i>agua de pipa</i>, <i>arroz con mango</i> and <i>jalarse una torta</i>.</div>
+
+    <div class="section-title">Velocidad</div>
+    <div class="chips" id="speedChips"></div>
+    <div class="err" id="menuErr"></div>
+
+    <div class="center"><button class="btn" id="btnStart">¡Jugar!</button></div>
+
+    <ul class="how">
+      <li><b>Move:</b> the frog hops toward your mouse pointer (on a tablet, drag your finger). Arrow keys / WASD work too.</li>
+      <li><b>Choose a word with your tongue:</b> click or tap the insect (or its word), or press <b>Space</b>. Touching or jumping on an insect doesn't choose it.</li>
+      <li>Catch the insect carrying the <b>Spanish</b> word for the English word at the top. Each right word makes the frog <b>bigger</b>. A wrong word makes it smaller and resets your streak.</li>
+      <li><b>Leap:</b> hop toward the snake and the frog leaps <b>over</b> it.</li>
+      <li><b>😳 ¡Susto!</b> (button, Shift, E or right-click), <b>once per game</b>: the frog spreads out and flashes its colors. The bocaracá runs away scared for a few seconds and every word is worth <b>double</b>.</li>
+      <li><b>💡 Pista</b> (button or H): the first press shows the first letters of the word. The second press makes the right insect glow, but that catch doesn't count toward your streak.</li>
+      <li>The more words the frog eats, the <b>faster</b> the insects and the snake move.</li>
+      <li><b>Win:</b> get <b>5 right words in a row</b>. The bocaracá takes a heart when it bites, and after 3 bites the game is over.</li>
+    </ul>
+    <div class="fact">🐸 Ticos call the red-eyed tree frog <b>rana calzonuda</b> (“frog in pants”) because its blue-and-yellow sides and orange feet look like it’s wearing trousers. When a predator comes close, it suddenly flashes those bright colors to startle it, just like the <b>¡Susto!</b> move. The <b>bocaracá</b> is the eyelash viper, a golden-yellow snake of Costa Rica’s rainforests.</div>
+  </div>
+</div>
+
+<!-- Pause -->
+<div id="pauseOv" class="overlay hidden">
+  <div class="card center" style="max-width:420px">
+    <h2>Pausa</h2>
+    <p>Tomá un respiro. 🐸</p>
+    <div class="btn-row">
+      <button class="btn" id="btnResume">Seguir</button>
+      <button class="btn secondary" id="btnQuit">Menú</button>
+    </div>
+  </div>
+</div>
+
+<!-- Level complete / Game over -->
+<div id="endOv" class="overlay hidden">
+  <div class="card">
+    <h2 id="endTitle" class="center">¡Pura vida!</h2>
+    <p id="endMsg" class="center" style="margin:0"></p>
+    <div class="stats" id="endStats"></div>
+    <div id="reviewWrap">
+      <div class="section-title">Palabras para repasar</div>
+      <ul class="review" id="reviewList"></ul>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="btnNext">Siguiente nivel</button>
+      <button class="btn secondary" id="btnMenu">Menú</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+/* =========================================================
+   VOCABULARY (English prompt → Costa Rican Spanish answer)
+   ========================================================= */
+const WORDS = [
+  // Platos y bebidas ticas
+  ['rice & beans breakfast', 'gallo pinto'], ['typical lunch plate', 'casado'],
+  ['rice, beans & pork-rind bowl', 'chifrijo'], ['beef & vegetable stew', 'olla de carne'],
+  ['black bean soup with egg', 'sopa negra'], ['Tico sour cream', 'natilla'],
+  ['the famous tangy brown sauce', 'salsa Lizano'], ['hot sugarcane drink', 'agua dulce'],
+  ['block of raw cane sugar', 'tapa de dulce'], ['peach palm fruit', 'pejibaye'],
+  ['sweet corn pancake', 'chorreada'], ['cheese-filled tortilla', 'tortilla aliñada'],
+  ['chopped vegetable hash', 'picadillo'], ['little appetizer plates', 'bocas'],
+  ['shaved ice with condensed milk', 'copo'], ['Puntarenas shaved-ice dessert', 'churchill'],
+  ['Caribbean coconut seafood stew', 'rondón'], ['Caribbean spicy meat pastry', 'patí'],
+  ['sweet corn cake', 'tamal asado'], ['homemade fruit drink', 'fresco'],
+  ['cake', 'queque'], ['coconut water (from a green coconut)', 'agua de pipa'],
+  ['flaky pastry sandwich', 'arreglado'], ['yuca fritter', 'enyucado'],
+  ['sweet fried ripe plantain', 'maduro'], ['cilantro', 'culantro'],
+  ['sweet bell pepper', 'chile dulce'], ['drip coffee (cloth filter)', 'café chorreado'],
+  ['Caribbean spiced sweet bread', 'pan bon'], ['afternoon coffee break & snack', 'cafecito'],
+  // Expresiones ticas con comida
+  ['money (literally "flour")', 'harina'], ['a total mess', 'arroz con mango'],
+  ['to mess up badly', 'jalarse una torta'], ['to be broke / in trouble', 'estar en la olla'],
+  ['to fall for a fib', 'comer cuento'], ['to trick someone', 'dar atolillo con el dedo'],
+  ['what luck! (literally "what milk!")', 'qué leche'], ['to be unlucky (literally "salted")', 'estar salado'],
+  ['as Costa Rican as it gets', 'más tico que el gallo pinto'], ['a shady deal / a scam', 'chorizo'],
+  ['seriously / for real', 'al chile'], ['nothing at all (not even a potato)', 'ni papa'],
+  // Lugares y cosas de comida tica
+  ['small local diner', 'soda'], ['corner store', 'pulpería'], ['farmers\' market', 'feria del agricultor'],
+  ['town fair with food & rides', 'turno'], ['jar of pickled hot peppers', 'chilero'],
+  ['small tortilla snack with a topping', 'gallo'],
+];
+const SPEEDS = { lento: ['🐢 Despacio', 0.6], normal: ['🐸 Normal', 1], rapido: ['⚡ Rápido', 1.4] };
+
+/* =========================================================
+   STORAGE (safe)
+   ========================================================= */
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('ranaCalzonuda.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('ranaCalzonuda.' + k, JSON.stringify(v)); } catch {} },
+};
+
+/* =========================================================
+   DOM
+   ========================================================= */
+const $ = id => document.getElementById(id);
+const cv = $('game'), ctx = cv.getContext('2d');
+const hud = $('hud');
+let selSpeed = store.get('speed', 'normal');
+let soundOn = store.get('sound', true);
+
+function buildChips(el, entries, getSel, setSel) {
+  el.innerHTML = '';
+  for (const [key, label] of entries) {
+    const b = document.createElement('button');
+    b.className = 'chip' + (getSel() === key ? ' on' : '');
+    b.textContent = label;
+    b.onclick = () => { setSel(key); buildChips(el, entries, getSel, setSel); };
+    el.appendChild(b);
+  }
+}
+function refreshMenu() {
+  buildChips($('speedChips'), Object.entries(SPEEDS).map(([k, s]) => [k, s[0]]), () => selSpeed, k => { selSpeed = k; store.set('speed', k); });
+}
+refreshMenu();
+$('btnSound').textContent = soundOn ? '🔊' : '🔇';
+
+/* =========================================================
+   UTIL
+   ========================================================= */
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const norm = s => s.trim().toLowerCase();
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function angDiff(a, b) { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; }
+
+/* =========================================================
+   AUDIO
+   ========================================================= */
+let actx = null;
+function audio() {
+  if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch { actx = null; } }
+  if (actx && actx.state === 'suspended') actx.resume();
+  return actx;
+}
+function tone(f1, f2, dur, type = 'sine', vol = 0.15, delay = 0) {
+  if (!soundOn) return; const a = audio(); if (!a) return;
+  const t0 = a.currentTime + delay;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type; o.frequency.setValueAtTime(f1, t0); o.frequency.exponentialRampToValueAtTime(Math.max(30, f2), t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g).connect(a.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+}
+function noise(dur, vol = 0.12, freq = 3000) {
+  if (!soundOn) return; const a = audio(); if (!a) return;
+  const len = Math.floor(a.sampleRate * dur), buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+  f.type = 'highpass'; f.frequency.value = freq; g.gain.value = vol; s.buffer = buf;
+  s.connect(f).connect(g).connect(a.destination); s.start();
+}
+const sfx = {
+  tongue() { tone(700, 1400, 0.08, 'sine', 0.06); },
+  correct() { tone(660, 660, 0.09, 'triangle', 0.16); tone(880, 880, 0.09, 'triangle', 0.16, 0.08); tone(1320, 1320, 0.16, 'triangle', 0.16, 0.16); },
+  wrong() { tone(220, 110, 0.35, 'sawtooth', 0.09); },
+  miss() { tone(500, 220, 0.4, 'triangle', 0.12); },
+  hit() { noise(0.45, 0.18, 2500); tone(160, 60, 0.4, 'square', 0.08); },
+  hiss() { noise(0.6, 0.06, 4000); },
+  level() { [523, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.18, 'triangle', 0.15, i * 0.12)); },
+  leap() { tone(300, 900, 0.3, 'sine', 0.1); },
+  startle() { tone(300, 1100, 0.18, 'square', 0.07); tone(1100, 400, 0.22, 'square', 0.06, 0.15); },
+  over() { [392, 330, 262].forEach((f, i) => tone(f, f * 0.98, 0.3, 'triangle', 0.13, i * 0.22)); },
+};
+let esVoice = null;
+function pickVoice() {
+  if (!('speechSynthesis' in window)) return;
+  const vs = speechSynthesis.getVoices();
+  for (const l of ['es-cr', 'es-mx', 'es-us', 'es-419', 'es-co', 'es']) {
+    const v = vs.find(v => v.lang.toLowerCase().replace('_', '-').startsWith(l));
+    if (v) { esVoice = v; return; }
+  }
+}
+if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+function speak(text) {
+  if (!soundOn || !('speechSynthesis' in window)) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = esVoice ? esVoice.lang : 'es-CR'; if (esVoice) u.voice = esVoice; u.rate = 0.9;
+    speechSynthesis.speak(u);
+  } catch {}
+}
+
+/* =========================================================
+   CANVAS + BACKGROUND
+   ========================================================= */
+let W = 0, H = 0, DPR = 1, topY = 100, S = 1;
+const bg = document.createElement('canvas'), bgx = bg.getContext('2d');
+
+function resize() {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  S = clamp(Math.min(W, H) / 700, 0.8, 1.2);
+  measureHud();
+  buildBg();
+}
+function measureHud() { topY = (hud.style.visibility === 'hidden' ? 90 : hud.offsetHeight) + 8; }
+
+function leafShape(c, x, y, len, wid, ang, col, rib) {
+  c.save(); c.translate(x, y); c.rotate(ang);
+  c.beginPath(); c.moveTo(0, 0);
+  c.quadraticCurveTo(len * 0.5, -wid, len, 0); c.quadraticCurveTo(len * 0.5, wid, 0, 0);
+  c.fillStyle = col; c.fill();
+  if (rib) { c.strokeStyle = rib; c.lineWidth = Math.max(1, wid * 0.08); c.beginPath(); c.moveTo(0, 0); c.lineTo(len * 0.95, 0); c.stroke(); }
+  c.restore();
+}
+
+function buildBg() {
+  bg.width = cv.width; bg.height = cv.height;
+  const c = bgx; c.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const r = mulberry32(7);
+  // sky through canopy
+  const g = c.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#1f5e3c'); g.addColorStop(0.45, '#2c7146'); g.addColorStop(1, '#123d26');
+  c.fillStyle = g; c.fillRect(0, 0, W, H);
+  // light shafts
+  c.save(); c.globalAlpha = 0.07; c.fillStyle = '#fff7b0';
+  for (let i = 0; i < 5; i++) {
+    const x = r() * W; c.beginPath(); c.moveTo(x, 0); c.lineTo(x + 60 + r() * 60, 0); c.lineTo(x - 120 + r() * 80, H); c.lineTo(x - 260 + r() * 80, H); c.fill();
+  }
+  c.restore();
+  // distant foliage blobs
+  for (let layer = 0; layer < 3; layer++) {
+    const cols = [['#1a4d30', '#235c38'], ['#2a6b3e', '#1f5a33'], ['#347a44', '#2b6e3c']][layer];
+    c.globalAlpha = 0.45 + layer * 0.15;
+    for (let i = 0; i < 60; i++) {
+      const x = r() * W, y = r() * H, rad = (30 + r() * 70) * (1 - layer * 0.2);
+      c.fillStyle = cols[i % 2]; c.beginPath(); c.arc(x, y, rad, 0, Math.PI * 2); c.fill();
+    }
+  }
+  c.globalAlpha = 1;
+  // branches
+  const nb = Math.max(3, Math.round(W / 320));
+  for (let i = 0; i < nb; i++) {
+    const y0 = H * (0.25 + r() * 0.65), y1 = H * (0.2 + r() * 0.7);
+    const fromLeft = i % 2 === 0;
+    const x0 = fromLeft ? -40 : W + 40, x1 = fromLeft ? W * (0.4 + r() * 0.5) : W * (0.1 + r() * 0.5);
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2 - 60 + r() * 120;
+    const thick = 14 + r() * 16;
+    c.lineCap = 'round';
+    c.strokeStyle = '#3e2816'; c.lineWidth = thick + 4;
+    c.beginPath(); c.moveTo(x0, y0); c.quadraticCurveTo(cx, cy, x1, y1); c.stroke();
+    c.strokeStyle = '#6b4526'; c.lineWidth = thick;
+    c.beginPath(); c.moveTo(x0, y0); c.quadraticCurveTo(cx, cy, x1, y1); c.stroke();
+    c.strokeStyle = 'rgba(160,120,70,0.5)'; c.lineWidth = thick * 0.25;
+    c.beginPath(); c.moveTo(x0, y0 - thick * 0.25); c.quadraticCurveTo(cx, cy - thick * 0.25, x1, y1 - thick * 0.25); c.stroke();
+    // moss + leaves along the branch
+    for (let k = 0; k < 14; k++) {
+      const t = r(), it = 1 - t;
+      const bx = it * it * x0 + 2 * it * t * cx + t * t * x1, by = it * it * y0 + 2 * it * t * cy + t * t * y1;
+      leafShape(c, bx, by - thick * 0.3, 20 + r() * 26, 7 + r() * 6, -Math.PI / 2 + (r() - 0.5) * 2.2, r() < 0.5 ? '#3f9a3c' : '#2f7d33', 'rgba(0,0,0,0.15)');
+    }
+    // bromeliad
+    if (r() < 0.8) {
+      const t = 0.3 + r() * 0.5, it = 1 - t;
+      const bx = it * it * x0 + 2 * it * t * cx + t * t * x1, by = it * it * y0 + 2 * it * t * cy + t * t * y1 - thick * 0.4;
+      for (let k = 0; k < 9; k++) leafShape(c, bx, by, 26 + r() * 14, 6, -Math.PI / 2 + (k - 4) * 0.28, k % 3 === 0 ? '#c8372d' : '#4cae45', null);
+    }
+  }
+  // hanging vines
+  for (let i = 0; i < Math.round(W / 140); i++) {
+    const x = r() * W, len = H * (0.2 + r() * 0.6);
+    c.strokeStyle = '#2d6a2a'; c.lineWidth = 2.5; c.beginPath(); c.moveTo(x, 0);
+    for (let y = 0; y < len; y += 10) c.lineTo(x + Math.sin(y * 0.03 + i) * 8, y);
+    c.stroke();
+    for (let y = 20; y < len; y += 26 + r() * 20) leafShape(c, x + Math.sin(y * 0.03 + i) * 8, y, 14 + r() * 8, 5, (r() < 0.5 ? 0.4 : Math.PI - 0.4), '#3c8f37', null);
+  }
+  // foreground leaves on the edges
+  const big = [[0, H, -0.9], [W, H, -2.3], [0, H * 0.55, -0.3], [W, H * 0.6, -2.9], [W * 0.5, H + 20, -1.6]];
+  for (const [x, y, a] of big) for (let k = 0; k < 3; k++) {
+    leafShape(c, x, y, (140 + r() * 80) * S, (38 + r() * 18) * S, a + (k - 1) * 0.45, k === 1 ? '#0f4a22' : '#145a2a', 'rgba(120,200,120,0.25)');
+  }
+  // vignette
+  const v = c.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.75);
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.45)');
+  c.fillStyle = v; c.fillRect(0, 0, W, H);
+}
+
+/* ambient */
+const mist = Array.from({ length: 10 }, () => ({ x: Math.random(), y: Math.random(), r: rand(120, 260), vx: rand(-0.008, 0.008) }));
+const glows = Array.from({ length: 18 }, () => ({ x: Math.random(), y: Math.random(), p: rand(0, 6), s: rand(0.5, 1.5) }));
+const falling = Array.from({ length: 6 }, () => ({ x: Math.random(), y: Math.random(), a: rand(0, 6), v: rand(0.02, 0.05), w: rand(1, 2.5) }));
+function updateAmbient(dt) {
+  for (const m of mist) { m.x += m.vx * dt; if (m.x < -0.3) m.x = 1.3; if (m.x > 1.3) m.x = -0.3; }
+  for (const f of falling) { f.y += f.v * dt; f.a += f.w * dt; if (f.y > 1.1) { f.y = -0.1; f.x = Math.random(); } }
+}
+function drawAmbient(t) {
+  for (const m of mist) {
+    const x = m.x * W, y = m.y * H, g = ctx.createRadialGradient(x, y, 0, x, y, m.r);
+    g.addColorStop(0, 'rgba(220,255,230,0.07)'); g.addColorStop(1, 'rgba(220,255,230,0)');
+    ctx.fillStyle = g; ctx.fillRect(x - m.r, y - m.r, m.r * 2, m.r * 2);
+  }
+  for (const f of falling) leafShape(ctx, f.x * W + Math.sin(f.a) * 20, f.y * H, 14, 5, f.a, 'rgba(140,190,70,0.7)', null);
+  for (const g of glows) {
+    const a = (Math.sin(t * g.s + g.p) + 1) / 2;
+    ctx.fillStyle = `rgba(230,255,140,${0.15 + a * 0.5})`;
+    ctx.beginPath(); ctx.arc(g.x * W + Math.sin(t * 0.3 + g.p) * 20, g.y * H, 1.5 + a * 1.5, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+/* =========================================================
+   DRAW: FROG (rana calzonuda) — side view, facing right
+   ========================================================= */
+function ell(c, x, y, rx, ry, rot = 0) { c.beginPath(); c.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), rot, 0, Math.PI * 2); }
+function toes(c, x, y, r, dir) {
+  c.strokeStyle = '#f08a1c'; c.lineWidth = r * 0.07; c.fillStyle = '#ffa53a';
+  for (let k = -1; k <= 1; k++) {
+    const a = dir + k * 0.5, tx = x + Math.cos(a) * r * 0.2, ty = y + Math.sin(a) * r * 0.2;
+    c.beginPath(); c.moveTo(x, y); c.lineTo(tx, ty); c.stroke();
+    c.beginPath(); c.arc(tx, ty, r * 0.065, 0, Math.PI * 2); c.fill();
+  }
+}
+function drawFrogBody(c, r, ext, blink, mouth, spread = 0) {
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  if (spread > 0) {
+    // the far-side legs splay out too, flashing orange feet and blue thighs
+    c.strokeStyle = '#2a5fd0'; c.lineWidth = r * 0.22;
+    c.beginPath(); c.moveTo(-0.3 * r, 0.2 * r); c.lineTo(-0.9 * r, -0.35 * r * spread); c.lineTo(-1.4 * r, -0.55 * r * spread); c.stroke();
+    toes(c, -1.4 * r, -0.55 * r * spread, r * 1.3, Math.PI * 1.15);
+    c.strokeStyle = '#3a9e34'; c.lineWidth = r * 0.17;
+    c.beginPath(); c.moveTo(0.4 * r, 0.1 * r); c.lineTo(0.95 * r, -0.05 * r); c.lineTo(1.35 * r, 0.25 * r * spread); c.stroke();
+    toes(c, 1.35 * r, 0.25 * r * spread, r * 1.3, 0);
+  }
+  // hind leg: thigh (blue with yellow bars — the "pants")
+  ell(c, -0.5 * r, 0.32 * r, 0.52 * r, 0.3 * r, 0.35 + ext * 0.4);
+  c.fillStyle = '#2a5fd0'; c.fill();
+  c.save(); c.clip();
+  c.strokeStyle = '#f2e36b'; c.lineWidth = r * 0.07;
+  for (let k = -3; k <= 2; k++) { c.beginPath(); c.moveTo(-0.5 * r + k * 0.18 * r, 0); c.lineTo(-0.5 * r + k * 0.18 * r - 0.1 * r, 0.7 * r); c.stroke(); }
+  c.restore();
+  const kx = -0.85 * r, ky = 0.5 * r;
+  const fx = lerp(-0.2 * r, -1.55 * r, ext), fy = lerp(0.8 * r, 0.55 * r, ext);
+  c.strokeStyle = '#3a9e34'; c.lineWidth = r * 0.2;
+  c.beginPath(); c.moveTo(-0.5 * r, 0.4 * r); c.lineTo(kx, ky); c.lineTo(fx, fy); c.stroke();
+  toes(c, fx, fy, r, ext > 0.5 ? Math.PI : Math.PI * 0.15);
+
+  // body
+  ell(c, 0, 0, 1.0 * r, 0.68 * r, -0.12);
+  const g = c.createLinearGradient(0, -0.7 * r, 0, 0.7 * r);
+  g.addColorStop(0, '#7be84f'); g.addColorStop(0.6, '#3fae32'); g.addColorStop(1, '#2a8a26');
+  c.fillStyle = g; c.fill();
+  // blue flank with cream bars
+  c.save(); ell(c, 0, 0, 1.0 * r, 0.68 * r, -0.12); c.clip();
+  ell(c, -0.15 * r, 0.6 * r - spread * 0.2 * r, 0.9 * r, (0.32 + spread * 0.25) * r, -0.12); c.fillStyle = '#2a5fd0'; c.fill();
+  c.strokeStyle = '#f5ecb0'; c.lineWidth = r * 0.06;
+  for (let k = -3; k <= 2; k++) { const bx = k * 0.22 * r; c.beginPath(); c.moveTo(bx, 0.32 * r); c.lineTo(bx - 0.06 * r, 0.75 * r); c.stroke(); }
+  ell(c, 0.25 * r, 0.62 * r, 0.6 * r, 0.16 * r, -0.12); c.fillStyle = '#fff6d8'; c.fill(); // pale belly
+  c.restore();
+  ell(c, 0, 0, 1.0 * r, 0.68 * r, -0.12); c.strokeStyle = 'rgba(20,70,20,0.55)'; c.lineWidth = r * 0.05; c.stroke();
+  // little white dorsal dots
+  c.fillStyle = 'rgba(255,255,255,0.55)';
+  [[-0.3, -0.35], [0.0, -0.45], [-0.55, -0.15]].forEach(([x, y]) => { c.beginPath(); c.arc(x * r, y * r, r * 0.04, 0, Math.PI * 2); c.fill(); });
+
+  // front leg
+  c.strokeStyle = '#3a9e34'; c.lineWidth = r * 0.17;
+  const ffx = 0.65 * r + ext * 0.25 * r + spread * 0.5 * r, ffy = 0.86 * r - ext * 0.15 * r + spread * 0.1 * r;
+  c.beginPath(); c.moveTo(0.45 * r, 0.35 * r); c.lineTo(0.58 * r, 0.6 * r); c.lineTo(ffx, ffy); c.stroke();
+  toes(c, ffx, ffy, r, Math.PI * 0.4);
+
+  // mouth
+  if (mouth > 0) {
+    c.fillStyle = '#7a1420';
+    c.beginPath(); c.moveTo(0.98 * r, 0.05 * r); c.lineTo(0.4 * r, 0.12 * r); c.lineTo(0.95 * r, 0.05 * r + mouth * 0.25 * r); c.closePath(); c.fill();
+  }
+  c.strokeStyle = '#1f5e1d'; c.lineWidth = r * 0.04;
+  c.beginPath(); c.moveTo(0.98 * r, 0.05 * r); c.quadraticCurveTo(0.7 * r, 0.18 * r, 0.38 * r, 0.1 * r); c.stroke();
+  c.fillStyle = '#1f5e1d'; c.beginPath(); c.arc(0.9 * r, -0.17 * r, r * 0.03, 0, Math.PI * 2); c.fill();
+
+  // eye — big and red
+  const ex = 0.5 * r, ey = -0.5 * r, er = (0.34 + spread * 0.1) * r; // eyes bulge during ¡Susto!
+  ell(c, ex, ey + 0.04 * r, er * 1.15, er * 1.1); c.fillStyle = '#4fc935'; c.fill();
+  const eg = c.createRadialGradient(ex - er * 0.3, ey - er * 0.3, er * 0.1, ex, ey, er);
+  eg.addColorStop(0, '#ff7a5c'); eg.addColorStop(0.6, '#e0201b'); eg.addColorStop(1, '#8e0c0a');
+  ell(c, ex, ey, er, er); c.fillStyle = eg; c.fill();
+  ell(c, ex + er * 0.1, ey, er * 0.2, er * 0.62); c.fillStyle = '#111'; c.fill();
+  c.fillStyle = 'rgba(255,255,255,0.85)'; c.beginPath(); c.arc(ex - er * 0.35, ey - er * 0.4, er * 0.18, 0, Math.PI * 2); c.fill();
+  if (blink > 0) {
+    c.save(); ell(c, ex, ey, er * 1.02, er * 1.02); c.clip();
+    c.fillStyle = '#4fc935'; c.fillRect(ex - er * 1.1, ey - er * 1.1, er * 2.2, er * 2.2 * blink); c.restore();
+  }
+}
+
+/* =========================================================
+   DRAW: INSECTS
+   ========================================================= */
+const INSECT_TYPES = ['butterfly', 'butterfly', 'beetle', 'dragonfly', 'moth', 'firefly'];
+const BUTTERFLY_COLS = [['#2b7bff', '#0b2e8a'], ['#ff9a1f', '#a14a00'], ['#ffe14a', '#a08000'], ['#ff5fa8', '#8a1650']];
+function drawInsectBody(c, ins, t) {
+  const s = ins.size;
+  const flap = Math.abs(Math.sin(t * (ins.type === 'dragonfly' ? 30 : 11) + ins.phase));
+  c.lineCap = 'round';
+  switch (ins.type) {
+    case 'butterfly': case 'moth': {
+      const [c1, c2] = ins.type === 'moth' ? ['#c9a678', '#6e5232'] : ins.col;
+      for (const sy of [-1, 1]) {
+        const f = 0.25 + flap * 0.75;
+        ell(c, s * 0.15, sy * s * 0.6 * f, s * 0.55, s * 0.62 * f, sy * -0.3); c.fillStyle = c1; c.fill(); c.strokeStyle = c2; c.lineWidth = 1.5; c.stroke();
+        ell(c, -s * 0.35, sy * s * 0.45 * f, s * 0.4, s * 0.45 * f, sy * 0.3); c.fillStyle = c1; c.fill(); c.stroke();
+        c.fillStyle = 'rgba(255,255,255,0.7)'; c.beginPath(); c.arc(s * 0.3, sy * s * 0.75 * f, s * 0.1, 0, Math.PI * 2); c.fill();
+      }
+      ell(c, 0, 0, s * 0.6, s * 0.13); c.fillStyle = '#222'; c.fill();
+      c.strokeStyle = '#222'; c.lineWidth = 1.2;
+      c.beginPath(); c.moveTo(s * 0.55, 0); c.lineTo(s * 0.95, -s * 0.3); c.moveTo(s * 0.55, 0); c.lineTo(s * 0.95, s * 0.3); c.stroke();
+      break;
+    }
+    case 'beetle': {
+      c.fillStyle = 'rgba(220,240,255,0.45)';
+      ell(c, -s * 0.1, -s * 0.55 * flap, s * 0.55, s * 0.35 * flap); c.fill();
+      ell(c, -s * 0.1, s * 0.55 * flap, s * 0.55, s * 0.35 * flap); c.fill();
+      c.strokeStyle = '#222'; c.lineWidth = 1.5;
+      for (let k = -1; k <= 1; k++) { c.beginPath(); c.moveTo(k * s * 0.3, 0); c.lineTo(k * s * 0.3 - s * 0.1, s * 0.55); c.moveTo(k * s * 0.3, 0); c.lineTo(k * s * 0.3 - s * 0.1, -s * 0.55); c.stroke(); }
+      ell(c, 0, 0, s * 0.7, s * 0.48); const g = c.createLinearGradient(0, -s * 0.5, 0, s * 0.5);
+      g.addColorStop(0, '#4be0a0'); g.addColorStop(1, '#127050'); c.fillStyle = g; c.fill();
+      c.strokeStyle = '#0a3a2a'; c.beginPath(); c.moveTo(s * 0.4, 0); c.lineTo(-s * 0.7, 0); c.stroke();
+      c.fillStyle = '#1a1a1a'; c.beginPath(); c.arc(s * 0.72, 0, s * 0.22, 0, Math.PI * 2); c.fill();
+      break;
+    }
+    case 'dragonfly': {
+      c.fillStyle = 'rgba(200,235,255,0.55)'; c.strokeStyle = 'rgba(120,180,220,0.8)'; c.lineWidth = 1;
+      for (const sy of [-1, 1]) {
+        const f = 0.4 + flap * 0.6;
+        ell(c, s * 0.2, sy * s * 0.55 * f, s * 0.18, s * 0.6 * f, sy * 0.2); c.fill(); c.stroke();
+        ell(c, -s * 0.15, sy * s * 0.5 * f, s * 0.16, s * 0.55 * f, sy * -0.2); c.fill(); c.stroke();
+      }
+      c.strokeStyle = '#1bb0c8'; c.lineWidth = s * 0.18; c.beginPath(); c.moveTo(s * 0.4, 0); c.lineTo(-s * 1.3, 0); c.stroke();
+      c.fillStyle = '#0d6f86'; c.beginPath(); c.arc(s * 0.55, 0, s * 0.22, 0, Math.PI * 2); c.fill();
+      break;
+    }
+    case 'firefly': {
+      const glow = 0.5 + 0.5 * Math.sin(t * 6 + ins.phase);
+      const g = c.createRadialGradient(-s * 0.4, 0, 0, -s * 0.4, 0, s * 1.4);
+      g.addColorStop(0, `rgba(255,250,120,${0.6 * glow + 0.2})`); g.addColorStop(1, 'rgba(255,250,120,0)');
+      c.fillStyle = g; c.beginPath(); c.arc(-s * 0.4, 0, s * 1.4, 0, Math.PI * 2); c.fill();
+      c.fillStyle = 'rgba(230,230,255,0.5)';
+      ell(c, 0, -s * 0.4 * flap, s * 0.45, s * 0.3 * flap); c.fill(); ell(c, 0, s * 0.4 * flap, s * 0.45, s * 0.3 * flap); c.fill();
+      ell(c, 0.1 * s, 0, s * 0.5, s * 0.25); c.fillStyle = '#3a2a1a'; c.fill();
+      ell(c, -s * 0.45, 0, s * 0.3, s * 0.22); c.fillStyle = `rgb(255,${220 + glow * 35},${80 + glow * 60})`; c.fill();
+      c.fillStyle = '#d24a2a'; c.beginPath(); c.arc(s * 0.6, 0, s * 0.15, 0, Math.PI * 2); c.fill();
+      break;
+    }
+  }
+}
+function drawInsect(ins, t) {
+  const face = ins.vx >= 0 ? 1 : -1;
+  if (game && game.hint >= 2 && ins.label === game.target.es && !ins.caught) { // hint glow
+    const p = 0.5 + 0.5 * Math.sin(time * 8);
+    const g = ctx.createRadialGradient(ins.x, ins.y, 0, ins.x, ins.y, 55);
+    g.addColorStop(0, `rgba(255,240,120,${0.55 + p * 0.35})`); g.addColorStop(1, 'rgba(255,240,120,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ins.x, ins.y, 55, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ffe36b'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(ins.x, ins.y, ins.size + 10 + p * 8, 0, Math.PI * 2); ctx.stroke();
+  }
+  if (ins.pop > 0) { // sparkle ring when the answer appears
+    ctx.strokeStyle = `rgba(255,240,150,${ins.pop})`; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(ins.x, ins.y, ins.size + (1 - ins.pop) * 40, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.save(); ctx.translate(ins.x, ins.y); ctx.scale(face, 1); drawInsectBody(ctx, ins, t); ctx.restore();
+}
+// word banners are drawn last, on top of the frog and snake, so a word is never hidden
+function drawInsectLabel(ins) {
+  if (ins.caught) return;
+  // word banner hanging from a silk thread
+  const fs = Math.round(clamp(17 * S, 14, 19));
+  ctx.font = `800 ${fs}px "Trebuchet MS", system-ui, sans-serif`;
+  const tw = ctx.measureText(ins.label).width, pw = tw + 18, ph = fs + 10;
+  const bx = ins.x - pw / 2, by = ins.y + ins.size + 10;
+  ins.bx = bx; ins.by = by; ins.bw = pw; ins.bh = ph; // remembered for tongue hits
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(ins.x, ins.y + ins.size * 0.3); ctx.lineTo(ins.x, by); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,252,240,0.95)'; ctx.strokeStyle = 'rgba(60,40,10,0.55)'; ctx.lineWidth = 2;
+  roundRect(ctx, bx, by, pw, ph, ph / 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#1b2a1b'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(ins.label, ins.x, by + ph / 2 + 1);
+}
+function roundRect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+
+/* =========================================================
+   GAME STATE
+   ========================================================= */
+let mode = 'menu';
+let game = null, frog = null, snake = null;
+let insects = [], particles = [], floaters = [];
+let time = 0;
+const pointer = { x: 0, y: 0, active: false };
+const keys = new Set();
+let inputMode = 'mouse';
+
+function buildPool() {
+  const seen = new Set(), pool = [];
+  for (const [en, es] of WORDS) { const k = norm(es); if (!seen.has(k)) { seen.add(k); pool.push({ en, es }); } }
+  return pool;
+}
+
+function startGame() {
+  const pool = buildPool();
+  audio();
+  game = {
+    pool, queue: [], target: null, level: 1, lives: 3, score: 0, g: 0, streak: 0, bestStreak: 0,
+    correct: 0, wrong: 0, missed: 0, review: new Map(), speed: SPEEDS[selSpeed][1], spawnT: 0, rotateT: 6,
+    spree: 0, sustoUsed: false,
+  };
+  lastStartleTxt = '';
+  $('menu').classList.add('hidden');
+  hud.style.visibility = 'visible';
+  measureHud();
+  startLevel();
+}
+
+function startLevel() {
+  insects = []; particles = []; floaters = [];
+  game.g = 0; game.spawnT = 0.2; game.rotateT = 6; game.spree = 0;
+  frog = { x: W / 2, y: (topY + H) / 2, r: baseR(0), facing: 1, hop: null, rest: 0, z: 0, tongue: null, tongueCd: 0, invuln: 1.5, startle: 0, startleCd: 0, blinkT: 2, blink: 0, mouth: 0, shake: 0 };
+  pointer.x = frog.x; pointer.y = frog.y; pointer.active = false;
+  downInfo = null;
+  snake = { state: 'away', timer: 3, x: 0, y: 0, ang: 0, trail: [], entry: null, exit: null };
+  nextWord();
+  updateHud();
+  mode = 'play';
+}
+
+function baseR(g) { return (25 + g * 2.8) * S; } // grows with every right word
+
+function nextWord() {
+  if (!game.queue.length) {
+    game.queue = shuffle(game.pool.slice());
+    if (game.target && game.queue.length > 1 && game.queue[0].es === game.target.es) game.queue.push(game.queue.shift());
+  }
+  game.target = game.queue.shift();
+  game.hint = 0;
+  $('promptWord').textContent = game.target.en;
+  clearTimeout(toastTimer); setSub(baseSub());
+  updateHintBtn();
+  const pc = $('promptCard'); pc.classList.add('pop'); setTimeout(() => pc.classList.remove('pop'), 160);
+}
+function requeue(w) { game.queue.splice(Math.min(3, game.queue.length), 0, w); }
+function addReview(w) { const k = w.es; const e = game.review.get(k) || { en: w.en, es: w.es, n: 0 }; e.n++; game.review.set(k, e); }
+function englishOf(es) { const w = game.pool.find(p => p.es === es); return w ? w.en : '?'; }
+
+/* =========================================================
+   INSECTS
+   ========================================================= */
+function maxInsects() { return W < 600 ? 6 : 8; }
+function insectSpeed() { return 42 * game.speed * pace() * clamp(W / 1100, 0.8, 1.0); }
+// Everything speeds up as the frog eats more words (up to twice as fast).
+function pace() { return Math.min(2, 1 + game.correct * 0.1); }
+// keep a clear strip under the top bar so messages never cover a word
+function insectBounds() { return { x0: 60, x1: W - 60, y0: topY + 35, y1: H - 75 }; }
+
+/* Insects roam around inside the rainforest. Every word on screen is different,
+   and the answer to the English word is always one of them. */
+function onScreenLabels() { return new Set(insects.map(i => i.label)); }
+
+function makeInsect(label, x, y, head) {
+  const type = pick(INSECT_TYPES);
+  const k = rand(0.85, 1.2);
+  return {
+    x, y, head, k, speed: insectSpeed() * k, turn: 0, vx: Math.cos(head), vy: Math.sin(head),
+    entering: false, leaving: false, exit: null, phase: rand(0, 6), pop: 0,
+    type, col: pick(BUTTERFLY_COLS), size: (type === 'firefly' ? 11 : type === 'dragonfly' ? 14 : 15) * clamp(S, 0.8, 1.1),
+    label, caught: false,
+  };
+}
+// a wrong word flies in from the edge of the forest
+function spawnInsect(label) {
+  const b = insectBounds();
+  const side = pick(['left', 'right', 'bottom']);
+  let x, y;
+  if (side === 'left') { x = -40; y = rand(b.y0, b.y1); }
+  else if (side === 'right') { x = W + 40; y = rand(b.y0, b.y1); }
+  else { x = rand(b.x0, b.x1); y = H + 40; }
+  const ins = makeInsect(label, x, y, Math.atan2((b.y0 + b.y1) / 2 - y, (b.x0 + b.x1) / 2 - x));
+  ins.entering = true;
+  insects.push(ins);
+}
+// the answer appears right away, in an open spot of the forest, with a sparkle
+function spawnAnswer(label) {
+  const b = insectBounds();
+  let best = null, bestScore = -1;
+  ctx.font = `800 ${Math.round(clamp(17 * S, 14, 19))}px "Trebuchet MS", system-ui, sans-serif`;
+  const hw = ctx.measureText(label).width / 2 + 24; // room for the whole word label
+  for (let k = 0; k < 30; k++) {
+    const p = { x: rand(Math.max(b.x0, hw), Math.min(b.x1, W - hw)), y: rand(b.y0 + 20, b.y1 - 20) };
+    let near = Infinity;
+    for (const o of insects) near = Math.min(near, Math.hypot((o.x - p.x) * 0.6, o.y - p.y));
+    const fromFrog = Math.hypot(frog.x - p.x, frog.y - p.y);
+    const score = Math.min(near, 200) + Math.min(fromFrog, 260) * 0.5 - (fromFrog < 120 ? 300 : 0);
+    if (score > bestScore) { bestScore = score; best = p; }
+  }
+  const ins = makeInsect(label, best.x, best.y, rand(0, Math.PI * 2));
+  ins.pop = 1;
+  insects.push(ins);
+  burst(best.x, best.y, ['#ffffff', '#ffe36b', '#a6ff7a'], 14);
+}
+function randomDistractor() {
+  const used = onScreenLabels();
+  let opts = game.pool.filter(p => p.es !== game.target.es && !used.has(p.es));
+  if (!opts.length) opts = game.pool.filter(p => p.es !== game.target.es);
+  return pick(opts).es;
+}
+function sendAway(ins) {
+  const opts = [{ x: -80, y: ins.y }, { x: W + 80, y: ins.y }, { x: ins.x, y: H + 80 }];
+  opts.sort((a, b) => Math.hypot(a.x - ins.x, a.y - ins.y) - Math.hypot(b.x - ins.x, b.y - ins.y));
+  ins.leaving = true; ins.entering = false; ins.exit = opts[0];
+}
+
+function ensureAnswer() {
+  const ans = game.target.es;
+  const b = insectBounds();
+  const cur = insects.find(i => !i.caught && i.label === ans);
+  if (cur && !cur.leaving && !cur.entering && cur.x >= b.x0 - 5 && cur.x <= b.x1 + 5 && cur.y >= b.y0 - 5 && cur.y <= b.y1 + 5) return;
+  // the answer is missing, still flying in, or flying away: show it right now instead
+  if (cur) insects.splice(insects.indexOf(cur), 1);
+  const present = insects.filter(i => !i.caught && !i.leaving);
+  if (present.length >= maxInsects()) {
+    const far = present.slice().sort((a, b) => Math.hypot(b.x - frog.x, b.y - frog.y) - Math.hypot(a.x - frog.x, a.y - frog.y));
+    if (far[0]) sendAway(far[0]);
+  }
+  spawnAnswer(ans);
+}
+
+function updateInsects(dt) {
+  const ans = game.target.es;
+  ensureAnswer();
+  const present = insects.filter(i => !i.caught && !i.leaving);
+  // keep the forest full
+  game.spawnT -= dt;
+  if (game.spawnT <= 0 && present.length < maxInsects()) { spawnInsect(randomDistractor()); game.spawnT = present.length < 4 ? 0.3 : 0.7; }
+  // every few seconds one wrong word flies off and a new one arrives
+  game.rotateT -= dt;
+  if (game.rotateT <= 0) {
+    game.rotateT = rand(5, 8);
+    const cands = present.filter(i => i.label !== ans && !i.entering && Math.hypot(i.x - frog.x, i.y - frog.y) > 150);
+    if (cands.length) sendAway(pick(cands));
+  }
+
+  const b = insectBounds();
+  for (let k = insects.length - 1; k >= 0; k--) {
+    const i = insects[k];
+    if (i.caught) continue;
+    i.pop = Math.max(0, i.pop - dt * 1.5);
+    let want = null;
+    if (i.leaving) want = Math.atan2(i.exit.y - i.y, i.exit.x - i.x);
+    else if (i.entering) {
+      const hw = (i.bw || 140) / 2 + 10;
+      if (i.x > Math.max(b.x0, hw) && i.x < Math.min(b.x1, W - hw) && i.y > b.y0 && i.y < b.y1) i.entering = false;
+      else want = Math.atan2((b.y0 + b.y1) / 2 - i.y, (b.x0 + b.x1) / 2 - i.x);
+    } else {
+      // gentle wandering, turning back near the edges of the forest
+      i.turn = clamp(i.turn + rand(-1, 1) * dt * 2.5, -0.9, 0.9);
+      i.head += i.turn * dt;
+      const m = 30;
+      if (i.x < b.x0 + m || i.x > b.x1 - m || i.y < b.y0 + m || i.y > b.y1 - m) want = Math.atan2((b.y0 + b.y1) / 2 - i.y, (b.x0 + b.x1) / 2 - i.x);
+    }
+    if (want !== null) i.head += clamp(angDiff(i.head, want), -2.5 * dt, 2.5 * dt);
+    const sp = insectSpeed() * i.k * (i.entering || i.leaving ? 2.5 : 1); // fly in and out quickly
+    i.vx = Math.cos(i.head) * sp; i.vy = Math.sin(i.head) * sp;
+    i.x += i.vx * dt; i.y += i.vy * dt + Math.sin(time * 3 + i.phase) * 6 * dt;
+    // words push apart so their labels never cover each other
+    if (!i.leaving) for (const o of insects) {
+      if (o === i || o.caught || o.leaving) continue;
+      const dx = i.x - o.x, dy = i.y - o.y;
+      const needX = ((i.bw || 90) + (o.bw || 90)) / 2 + 8, needY = 52;
+      if (Math.abs(dx) < needX && Math.abs(dy) < needY) {
+        const push = 60 * dt;
+        if (needX - Math.abs(dx) < needY - Math.abs(dy)) i.x += (dx >= 0 ? 1 : -1) * push; else i.y += (dy >= 0 ? 1 : -1) * push;
+      }
+    }
+    if (!i.leaving && !i.entering) {
+      // keep the whole word label on screen, even for long phrases
+      const hw = (i.bw || 140) / 2 + 10;
+      i.x = clamp(i.x, Math.max(b.x0, hw), Math.min(b.x1, W - hw)); i.y = clamp(i.y, b.y0, b.y1);
+    }
+    if (i.leaving && (i.x < -70 || i.x > W + 70 || i.y > H + 70)) insects.splice(k, 1);
+  }
+}
+
+/* =========================================================
+   EATING (only with the tongue)
+   ========================================================= */
+const WIN_STREAK = 5;
+function eat(ins) {
+  const idx = insects.indexOf(ins); if (idx >= 0) insects.splice(idx, 1);
+  const mouth = mouthPos();
+  if (ins.label === game.target.es) {
+    // a word found with the glowing hint keeps your streak but doesn't add to it
+    const glowHint = game.hint >= 2;
+    game.g = Math.min(14, game.g + 1); if (!glowHint) game.streak++; game.bestStreak = Math.max(game.bestStreak, game.streak); game.correct++;
+    const pts = Math.round((10 + Math.max(0, game.streak - 1) * 2) * (game.spree > 0 ? 2 : 1) * (game.hint ? 0.5 : 1)); game.score += pts;
+    floater(mouth.x, mouth.y - 20, `+${pts} ¡Correcto!${game.spree > 0 ? ' ×2' : ''}`, '#a6ff7a');
+    burst(mouth.x, mouth.y, ['#a6ff7a', '#ffe36b', '#ffffff'], 18);
+    sfx.correct(); speak(ins.label);
+    if (glowHint) addReview(game.target);
+    toast(`${esc(game.target.en)} = ${esc(ins.label)} ✓ · ${glowHint ? 'hint used, streak stays at ' + game.streak : game.streak + '/' + WIN_STREAK + ' seguidas'}`, 'good');
+    if (game.streak >= WIN_STREAK) { updateHud(); gameWon(); return; }
+    nextWord();
+  } else {
+    const lost = game.streak;
+    game.g = Math.max(0, game.g - 1); game.streak = 0; game.wrong++;
+    addReview(game.target);
+    floater(mouth.x, mouth.y - 20, '¡Uy! −1', '#ff8a7a');
+    burst(mouth.x, mouth.y, ['#ff8a7a', '#ffb199'], 10);
+    frog.shake = 0.35;
+    sfx.wrong();
+    toast(`“${esc(ins.label)}” means <b>${esc(englishOf(ins.label))}</b>. Find: <b>${esc(game.target.en)}</b>${lost ? ' · streak back to 0' : ''}`, 'bad');
+  }
+  updateHud();
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* =========================================================
+   FROG
+   ========================================================= */
+function mouthPos() { return { x: frog.x + frog.facing * frog.r * 0.98, y: frog.y - frog.z + frog.r * 0.06 }; }
+
+function shootTongue(tx, ty) {
+  if (mode !== 'play' || frog.tongue || frog.tongueCd > 0) return;
+  const m = mouthPos();
+  let dx = tx - m.x, dy = ty - m.y;
+  if (Math.abs(dx) > 4) frog.facing = dx > 0 ? 1 : -1;
+  const m2 = mouthPos(); dx = tx - m2.x; dy = ty - m2.y;
+  const d = Math.hypot(dx, dy) || 1;
+  frog.tongue = { dx: dx / d, dy: dy / d, len: 0, max: Math.min(d + 14, (130 + frog.r * 2.6) * clamp(S, 0.85, 1.1)), phase: 'out', caught: null };
+  sfx.tongue();
+}
+
+/* ¡Susto! — a real rana calzonuda spreads its legs and flashes its red eyes,
+   blue-and-yellow sides and orange feet to startle predators.
+   Once per game: a burst of colored light, then a SPREE (like a power pellet):
+   the bocaracá is scared and harmless while the frog grabs words for double points. */
+const STARTLE_T = 1.3, SPREE_T = 9;
+function doStartle() {
+  if (mode !== 'play' || game.sustoUsed) return;
+  game.sustoUsed = true; game.spree = SPREE_T;
+  frog.startle = STARTLE_T;
+  sfx.startle();
+  burst(frog.x, frog.y - frog.z, ['#2a5fd0', '#f08a1c', '#e0201b', '#f2e36b', '#7be84f'], 50);
+  floater(frog.x, frog.y - frog.r * 2, '¡SUSTO!', '#ffd34d');
+  toast('✨ ¡Susto! The bocaracá is scared! Grab words for <b>double points</b>!', 'good');
+  if (snake.state === 'hunt' || snake.state === 'retreat' || snake.state === 'stunned') { snake.state = 'retreat'; pickFleeCorner(); }
+  else if (snake.state === 'away' || snake.state === 'warning') { snake.state = 'away'; snake.timer = SPREE_T + 1; }
+  updateStartleBtn();
+}
+let lastStartleTxt = '';
+function updateStartleBtn() {
+  if (!frog || !game) return;
+  const txt = game.spree > 0 ? `✨ ${Math.ceil(game.spree)}` : game.sustoUsed ? '😳 usado' : '😳 ¡Susto!';
+  if (txt !== lastStartleTxt) { lastStartleTxt = txt; const b = $('btnStartle'); b.textContent = txt; b.classList.toggle('cooling', game.sustoUsed && game.spree <= 0); }
+}
+
+function updateFrog(dt) {
+  const f = frog;
+  f.invuln = Math.max(0, f.invuln - dt);
+  f.tongueCd = Math.max(0, f.tongueCd - dt);
+  f.startle = Math.max(0, f.startle - dt);
+  if (game.spree > 0) { game.spree -= dt; if (game.spree <= 0) { game.spree = 0; toast('The bocaracá is coming back… 🐍', 'bad'); } }
+  f.shake = Math.max(0, f.shake - dt);
+  f.r = lerp(f.r, baseR(game.g), Math.min(1, dt * 6));
+  f.blinkT -= dt; if (f.blinkT <= 0) { f.blink = 1; f.blinkT = rand(2, 5); }
+  f.blink = Math.max(0, f.blink - dt * 6);
+  f.mouth = Math.max(0, f.mouth - dt * 5);
+
+  // movement target
+  let target = null;
+  let kx = 0, ky = 0;
+  if (keys.has('ArrowLeft') || keys.has('a')) kx -= 1;
+  if (keys.has('ArrowRight') || keys.has('d')) kx += 1;
+  if (keys.has('ArrowUp') || keys.has('w')) ky -= 1;
+  if (keys.has('ArrowDown') || keys.has('s')) ky += 1;
+  if (kx || ky) { const d = Math.hypot(kx, ky); target = { x: f.x + kx / d * 200, y: f.y + ky / d * 200 }; }
+  else { updatePress(); if (pointer.active) target = { x: pointer.x, y: pointer.y }; }
+
+  f.rest -= dt;
+  if (!f.hop && f.rest <= 0 && target) {
+    const dx = target.x - f.x, dy = target.y - f.y, d = Math.hypot(dx, dy);
+    if (d > 10) {
+      let len = Math.min(d, (62 + f.r * 0.5) * clamp(S, 0.8, 1.1));
+      if (Math.abs(dx) > 3 && !f.tongue) f.facing = dx > 0 ? 1 : -1;
+      // Hopping toward a nearby snake turns into a big leap over it.
+      let big = false;
+      if (snake && (snake.state === 'hunt' || snake.state === 'retreat' || snake.state === 'stunned')) {
+        const sx = snake.x - f.x, sy = snake.y - f.y, sd = Math.hypot(sx, sy);
+        if (sd < 170 * S && (sx * dx + sy * dy) / (sd * d || 1) > 0.2) { big = true; len = Math.max(len, 200 * S); }
+      }
+      f.hop = { t: 0, dur: big ? 0.5 : 0.28, big, fx: f.x, fy: f.y, tx: f.x + dx / d * len, ty: f.y + dy / d * len };
+      if (big) { sfx.leap(); floater(f.x, f.y - f.r * 1.8, '¡Salto!', '#a6ff7a'); }
+    }
+  }
+  if (f.hop) {
+    const h = f.hop; h.t += dt / h.dur;
+    const p = Math.min(1, h.t), e = 1 - (1 - p) * (1 - p);
+    f.x = lerp(h.fx, h.tx, e); f.y = lerp(h.fy, h.ty, e);
+    f.z = Math.sin(Math.PI * p) * (h.big ? 55 + f.r * 0.6 : 12 + f.r * 0.4);
+    if (h.t >= 1) { f.hop = null; f.z = 0; f.rest = 0.06; }
+  }
+  f.x = clamp(f.x, f.r * 1.2, W - f.r * 1.2);
+  f.y = clamp(f.y, topY + f.r, H - f.r * 0.9);
+  f.z = Math.min(f.z, Math.max(0, f.y - topY - f.r)); // never hop up behind the HUD
+
+  // tongue
+  const t = f.tongue;
+  if (t) {
+    const m = mouthPos();
+    if (t.phase === 'out') {
+      t.len += t.max / 0.11 * dt;
+      const tip = { x: m.x + t.dx * t.len, y: m.y + t.dy * t.len };
+      for (const i of insects) {
+        if (i.caught) continue;
+        // the tongue can hit the insect or the word banner it carries
+        const onBug = Math.hypot(i.x - tip.x, i.y - tip.y) < i.size + 10;
+        const onWord = i.bw && tip.x > i.bx - 6 && tip.x < i.bx + i.bw + 6 && tip.y > i.by - 6 && tip.y < i.by + i.bh + 6;
+        if (onBug || onWord) { i.caught = true; t.caught = i; t.phase = 'in'; break; }
+      }
+      if (t.len >= t.max) { t.len = t.max; t.phase = 'in'; }
+    } else {
+      t.len -= t.max / 0.14 * dt;
+      if (t.caught) { t.caught.x = m.x + t.dx * Math.max(0, t.len); t.caught.y = m.y + t.dy * Math.max(0, t.len); }
+      if (t.len <= 0) {
+        const c = t.caught; f.tongue = null; f.tongueCd = 0.08;
+        if (c) { f.mouth = 1; eat(c); }
+      }
+    }
+  }
+
+  // touching or jumping on an insect does NOT choose it — only the tongue does
+}
+
+function drawFrog(t) {
+  const f = frog;
+  // shadow
+  ctx.fillStyle = `rgba(0,0,0,${0.25 - f.z * 0.004})`;
+  ell(ctx, f.x, f.y + f.r * 0.78, f.r * (1.05 - f.z * 0.005), f.r * 0.22); ctx.fill();
+  // tongue (behind head)
+  const m = mouthPos();
+  if (f.tongue) {
+    const tip = { x: m.x + f.tongue.dx * f.tongue.len, y: m.y + f.tongue.dy * f.tongue.len };
+    ctx.strokeStyle = '#e8506a'; ctx.lineCap = 'round'; ctx.lineWidth = Math.max(4, f.r * 0.16);
+    ctx.beginPath(); ctx.moveTo(m.x, m.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
+    ctx.fillStyle = '#ff6f86'; ctx.beginPath(); ctx.arc(tip.x, tip.y, Math.max(4, f.r * 0.15), 0, Math.PI * 2); ctx.fill();
+  }
+  const sp = f.startle / STARTLE_T;
+  const cx = f.x, cy = f.y - f.z;
+  const FLASH = ['#e0201b', '#f08a1c', '#f2e36b', '#7be84f', '#2a5fd0', '#9b5cff'];
+  if (sp > 0) {
+    // bright burst of colored light rays spinning out from the frog
+    const R = f.r * (3 + (1 - sp) * 6);
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(t * 1.5);
+    for (let k = 0; k < 12; k++) {
+      const a = k / 12 * Math.PI * 2;
+      ctx.globalAlpha = 0.8 * sp; ctx.fillStyle = FLASH[k % FLASH.length];
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, R, a - 0.17, a + 0.17); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, f.r * 4);
+    g.addColorStop(0, `rgba(255,255,230,${0.9 * sp})`); g.addColorStop(1, 'rgba(255,255,230,0)');
+    ctx.globalAlpha = 1; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, f.r * 4, 0, Math.PI * 2); ctx.fill();
+  }
+  if (game.spree > 0) {
+    // soft rainbow glow for the rest of the spree
+    const pulse = 0.5 + 0.5 * Math.sin(t * 6);
+    ctx.lineWidth = 5 * S;
+    for (let k = 0; k < 3; k++) {
+      ctx.globalAlpha = 0.35 + pulse * 0.3; ctx.strokeStyle = FLASH[(Math.floor(t * 4) + k * 2) % FLASH.length];
+      ctx.beginPath(); ctx.arc(cx, cy, f.r * (1.35 + k * 0.28 + pulse * 0.1), 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+  if (f.invuln > 0 && sp <= 0 && Math.floor(t * 12) % 2 === 0) ctx.globalAlpha = 0.45;
+  ctx.save();
+  const sx = f.shake > 0 ? Math.sin(t * 60) * 4 : 0;
+  ctx.translate(f.x + sx, f.y - f.z);
+  const ext = f.hop ? Math.sin(Math.PI * Math.min(1, f.hop.t)) : 0;
+  ctx.rotate(f.hop ? -0.15 * f.facing * Math.sin(Math.PI * f.hop.t) : 0);
+  ctx.scale(f.facing, 1);
+  // squash & stretch
+  ctx.scale(1 + ext * 0.08, 1 - ext * 0.05);
+  const spread = sp > 0 ? Math.min(1, (1 - sp) * 6, sp * 4) : 0; // quick spread, hold, relax
+  if (spread > 0) ctx.scale(1 + spread * 0.35, 1 + spread * 0.35);
+  drawFrogBody(ctx, f.r, Math.max(ext, spread), spread > 0 ? 0 : f.blink, f.mouth || (f.tongue ? 1 : 0), spread);
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+/* =========================================================
+   SNAKE — bocaracá (eyelash viper)
+   ========================================================= */
+const SEG = 26, SPACING = 11;
+// Slower than the frog's hopping (~200 px/s) so the player can always get away.
+function snakeSpeed() { return 88 * game.speed * Math.min(1.6, pace()) * clamp(S, 0.8, 1.0); } // capped so the frog can still outrun it
+function snakeWidth() { return 17 * clamp(S, 0.75, 1.1); }
+
+function sampleBody() {
+  const pts = [{ x: snake.x, y: snake.y }];
+  let prev = pts[0], acc = 0;
+  for (let i = snake.trail.length - 1; i >= 0 && pts.length < SEG; i--) {
+    const p = snake.trail[i]; let d = Math.hypot(p.x - prev.x, p.y - prev.y);
+    while (acc + d >= SPACING && pts.length < SEG) {
+      const tt = (SPACING - acc) / d; const q = { x: prev.x + (p.x - prev.x) * tt, y: prev.y + (p.y - prev.y) * tt };
+      pts.push(q); prev = q; d = Math.hypot(p.x - prev.x, p.y - prev.y); acc = 0;
+    }
+    acc += d; prev = p;
+  }
+  while (pts.length < SEG) pts.push({ ...pts[pts.length - 1] });
+  return pts;
+}
+
+function updateSnake(dt) {
+  const s = snake;
+  if (s.state === 'away') {
+    s.timer -= dt;
+    if (s.timer <= 0) {
+      // enter from the side farthest from the frog
+      const side = frog.x < W / 2 ? 'right' : 'left';
+      const x = side === 'left' ? -30 : W + 30, y = rand(topY + 60, H - 60);
+      s.entry = { x, y, side }; s.state = 'warning'; s.timer = 1.8;
+      sfx.hiss(); toast('⚠️ ¡Cuidado! <b>Bocaracá</b>', 'bad');
+    }
+  } else if (s.state === 'warning') {
+    s.timer -= dt;
+    if (s.timer <= 0) {
+      s.x = s.entry.x; s.y = s.entry.y;
+      s.ang = Math.atan2(frog.y - s.y, frog.x - s.x);
+      s.trail = [];
+      for (let k = 80; k > 0; k--) s.trail.push({ x: s.x - Math.cos(s.ang) * k * 4, y: s.y - Math.sin(s.ang) * k * 4 });
+      s.state = 'hunt';
+    }
+  } else if (s.state === 'stunned') {
+    s.timer -= dt;
+    if (s.timer <= 0) startRetreat();
+  } else if (s.state === 'hunt' || s.state === 'retreat') {
+    // The snake stays on screen: it chases the frog, and after a bite or a
+    // ¡Susto! it backs off to the far corner for a few seconds, then chases again.
+    const goal = s.state === 'hunt' ? { x: frog.x, y: frog.y } : s.exit;
+    const want = Math.atan2(goal.y - s.y, goal.x - s.x);
+    const turn = (s.state === 'hunt' ? 1.6 + game.level * 0.1 : 3) * dt;
+    s.ang += clamp(angDiff(s.ang, want), -turn, turn);
+    const sp = snakeSpeed() * (s.state === 'retreat' ? 1.2 : 1);
+    s.x += Math.cos(s.ang) * sp * dt; s.y += Math.sin(s.ang) * sp * dt;
+    s.x = clamp(s.x, -20, W + 20); s.y = clamp(s.y, topY, H + 20);
+    const last = s.trail[s.trail.length - 1];
+    if (!last || Math.hypot(last.x - s.x, last.y - s.y) > 2) s.trail.push({ x: s.x, y: s.y });
+    if (s.trail.length > 400) s.trail.splice(0, s.trail.length - 400);
+    if (s.state === 'retreat') {
+      if (game.spree > 0) { // scared during the ¡Susto! spree: keep fleeing to the corner farthest from the frog
+        s.fleeT = (s.fleeT || 0) - dt;
+        if (s.fleeT <= 0) { pickFleeCorner(); s.fleeT = 0.5; }
+      } else {
+        s.timer -= dt;
+        if (s.timer <= 0 || Math.hypot(s.exit.x - s.x, s.exit.y - s.y) < 30) s.state = 'hunt';
+      }
+    } else if (game.spree <= 0) {
+      // collision
+      if (frog.invuln <= 0 && frog.z < 10) { // a frog in the air sails over the snake
+        const pts = sampleBody(); const w = snakeWidth();
+        for (let i = 0; i < 5; i++) { // only the head and neck can bite
+          const ww = w * (1 - i / pts.length * 0.6);
+          if (Math.hypot(pts[i].x - frog.x, pts[i].y - (frog.y - frog.z)) < frog.r * 0.72 + ww * 0.5) { snakeHit(); break; }
+        }
+      }
+    }
+  }
+}
+function pickFleeCorner() {
+  const m = 80;
+  const corners = [{ x: m, y: topY + m }, { x: W - m, y: topY + m }, { x: m, y: H - m }, { x: W - m, y: H - m }];
+  corners.sort((a, b) => Math.hypot(b.x - frog.x, b.y - frog.y) - Math.hypot(a.x - frog.x, a.y - frog.y));
+  snake.exit = corners[0];
+}
+function startRetreat() {
+  pickFleeCorner(); snake.state = 'retreat'; snake.timer = 3.5;
+}
+function snakeHit() {
+  game.lives--; // a bite costs a heart and some size, but not your streak
+  game.g = Math.max(0, game.g - 2);
+  frog.invuln = 2.2; frog.shake = 0.5;
+  sfx.hit();
+  burst(frog.x, frog.y, ['#f4cf2a', '#ff8a7a', '#fff'], 22);
+  floater(frog.x, frog.y - frog.r * 1.6, '¡Bocaracá! −1 ❤', '#ffd34d');
+  // knock frog away
+  const a = Math.atan2(frog.y - snake.y, frog.x - snake.x), d = 120 * S;
+  frog.hop = { t: 0, dur: 0.35, fx: frog.x, fy: frog.y, tx: clamp(frog.x + Math.cos(a) * d, 40, W - 40), ty: clamp(frog.y + Math.sin(a) * d, topY + 30, H - 30) };
+  startRetreat();
+  updateHud();
+  if (game.lives <= 0) gameOver();
+}
+
+function drawSnake(t) {
+  const s = snake;
+  if (s.state === 'warning') {
+    const p = (Math.sin(t * 10) + 1) / 2;
+    const x = clamp(s.entry.x, 34, W - 34), y = clamp(s.entry.y, topY + 34, H - 34);
+    ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = `rgba(244,207,42,${0.25 + p * 0.35})`; ctx.beginPath(); ctx.arc(0, 0, 30 + p * 10, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#f4cf2a'; ctx.strokeStyle = '#5a3a00'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(19, 14); ctx.lineTo(-19, 14); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#5a3a00'; ctx.font = '900 22px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('!', 0, 3);
+    ctx.restore();
+    return;
+  }
+  if (s.state !== 'hunt' && s.state !== 'retreat' && s.state !== 'stunned') return;
+  const pts = sampleBody(), w = snakeWidth();
+  if (s.state === 'stunned') { // dizzy stars over the head
+    ctx.fillStyle = '#ffe36b'; ctx.font = `${Math.round(18 * S)}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let k = 0; k < 3; k++) { const a = t * 5 + k * 2.1; ctx.fillText('✦', s.x + Math.cos(a) * 18 * S, s.y - 22 * S + Math.sin(a) * 6 * S); }
+  }
+  if (game.spree > 0) { // scared: faded, with sweat drops
+    ctx.font = `${Math.round(20 * S)}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('💦', s.x + 16 * S, s.y - 24 * S + Math.sin(t * 8) * 3);
+    ctx.globalAlpha = 0.5;
+  }
+  // slither wiggle
+  const wt = s.state === 'stunned' ? 0 : t; // freeze the slither while stunned
+  const wp = pts.map((p, i) => {
+    const q = pts[Math.min(pts.length - 1, i + 1)], o = pts[Math.max(0, i - 1)];
+    let nx = -(o.y - q.y), ny = o.x - q.x; const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l;
+    const amp = Math.min(6, i * 0.9) * S;
+    const off = Math.sin(i * 0.7 - wt * 9) * amp;
+    return { x: p.x + nx * off, y: p.y + ny * off };
+  });
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // outline pass then fill pass, tapering to the tail
+  for (const pass of [0, 1]) {
+    for (let i = wp.length - 1; i > 0; i--) {
+      const ww = w * (1 - (i / wp.length) * 0.75);
+      ctx.strokeStyle = pass === 0 ? '#7a5a06' : (i % 2 ? '#f4cf2a' : '#f7d940');
+      ctx.lineWidth = pass === 0 ? ww + 4 : ww;
+      ctx.beginPath(); ctx.moveTo(wp[i].x, wp[i].y); ctx.lineTo(wp[i - 1].x, wp[i - 1].y); ctx.stroke();
+    }
+  }
+  // speckles
+  for (let i = 2; i < wp.length; i += 2) {
+    ctx.fillStyle = i % 4 ? 'rgba(140,70,10,0.7)' : 'rgba(255,255,255,0.65)';
+    ctx.beginPath(); ctx.arc(wp[i].x + Math.sin(i) * 2, wp[i].y + Math.cos(i) * 2, 1.6 * S, 0, Math.PI * 2); ctx.fill();
+  }
+  // head
+  ctx.save(); ctx.translate(wp[0].x, wp[0].y); ctx.rotate(s.ang);
+  const hw = w * 0.85;
+  if ((t % 1.4) < 0.3) { // forked tongue
+    ctx.strokeStyle = '#d0203a'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(hw * 1.2, 0); ctx.lineTo(hw * 2.0, 0); ctx.lineTo(hw * 2.4, -hw * 0.25); ctx.moveTo(hw * 2.0, 0); ctx.lineTo(hw * 2.4, hw * 0.25); ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.moveTo(hw * 1.3, 0);
+  ctx.quadraticCurveTo(hw * 1.1, -hw * 0.9, -hw * 0.2, -hw * 1.05);
+  ctx.quadraticCurveTo(-hw * 0.9, -hw * 0.6, -hw * 0.9, 0);
+  ctx.quadraticCurveTo(-hw * 0.9, hw * 0.6, -hw * 0.2, hw * 1.05);
+  ctx.quadraticCurveTo(hw * 1.1, hw * 0.9, hw * 1.3, 0);
+  ctx.fillStyle = '#f7d940'; ctx.fill(); ctx.strokeStyle = '#7a5a06'; ctx.lineWidth = 2.5; ctx.stroke();
+  for (const sy of [-1, 1]) {
+    // eye
+    ctx.fillStyle = '#e9b10c'; ctx.beginPath(); ctx.arc(hw * 0.35, sy * hw * 0.62, hw * 0.28, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#111'; ell(ctx, hw * 0.37, sy * hw * 0.62, hw * 0.07, hw * 0.22, 0); ctx.fill();
+    // the "eyelashes": raised scales above each eye
+    ctx.strokeStyle = '#c99a08'; ctx.lineWidth = 2;
+    for (let k = -1; k <= 1; k++) {
+      ctx.beginPath(); ctx.moveTo(hw * (0.35 + k * 0.18), sy * hw * 0.85); ctx.lineTo(hw * (0.35 + k * 0.25), sy * hw * 1.2); ctx.stroke();
+    }
+  }
+  ctx.fillStyle = '#7a5a06'; ctx.beginPath(); ctx.arc(hw * 1.05, -hw * 0.25, 1.5, 0, Math.PI * 2); ctx.arc(hw * 1.05, hw * 0.25, 1.5, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+/* =========================================================
+   EFFECTS
+   ========================================================= */
+function burst(x, y, cols, n) {
+  for (let i = 0; i < n; i++) { const a = rand(0, Math.PI * 2), v = rand(60, 220); particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rand(0.4, 0.8), max: 0.8, col: pick(cols), s: rand(2, 5) }); }
+}
+function floater(x, y, text, col) { floaters.push({ x, y, text, col, t: 0, life: 1.3 }); }
+function updateFx(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) { const p = particles[i]; p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 300 * dt; p.vx *= 0.98; if (p.life <= 0) particles.splice(i, 1); }
+  for (let i = floaters.length - 1; i >= 0; i--) { const f = floaters[i]; f.t += dt; f.y -= 40 * dt; if (f.t > f.life) floaters.splice(i, 1); }
+}
+function drawFx() {
+  for (const p of particles) { ctx.globalAlpha = Math.max(0, p.life / p.max); ctx.fillStyle = p.col; ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, Math.PI * 2); ctx.fill(); }
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const f of floaters) {
+    ctx.globalAlpha = Math.max(0, 1 - f.t / f.life);
+    ctx.font = `900 ${Math.round(22 * clamp(S, 0.8, 1.1))}px "Trebuchet MS", system-ui`;
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.strokeText(f.text, f.x, f.y);
+    ctx.fillStyle = f.col; ctx.fillText(f.text, f.x, f.y);
+  }
+  ctx.globalAlpha = 1;
+}
+
+let toastTimer = 0;
+/* 💡 Pista: 1st press shows the first letter of each word ("d__ a_______ c__ e_ d___"),
+   2nd press makes the right insect glow. */
+function hintPattern(es) { return es.split(' ').map(w => w[0] + '_'.repeat(Math.max(0, w.length - 1))).join(' '); }
+function doHint() {
+  if (mode !== 'play' || game.hint >= 2) return;
+  game.hint++;
+  sfx.tongue();
+  clearTimeout(toastTimer); setSub(baseSub());
+  updateHintBtn();
+}
+function updateHintBtn() {
+  const b = $('btnHint'); if (!game) return;
+  b.textContent = game.hint === 0 ? '💡 Pista' : game.hint === 1 ? '💡 Más' : '💡 ✓';
+  b.classList.toggle('cooling', game.hint >= 2);
+}
+// Messages show inside the English card (never over the forest), then the card
+// goes back to its usual line (or the current hint).
+function baseSub() {
+  if (game && game.target && game.hint >= 1) return `💡 Pista: <b>${esc(hintPattern(game.target.es))}</b>${game.hint >= 2 ? ' · look for the glowing insect' : ''}`;
+  return 'Catch the Spanish word with your tongue';
+}
+function setSub(html, kind) { const el = $('promptSub'); el.innerHTML = html; el.className = 'sub ' + (kind || ''); }
+function toast(html, kind) {
+  setSub(html, kind);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => setSub(baseSub()), 2600);
+}
+
+/* =========================================================
+   HUD + SCREENS
+   ========================================================= */
+function updateHud() {
+  $('lives').textContent = '❤'.repeat(Math.max(0, game.lives)) + '♡'.repeat(Math.max(0, 3 - game.lives));
+  $('score').textContent = game.score;
+  $('sizeFill').style.width = (game.streak / WIN_STREAK * 100) + '%';
+  $('streakCount').textContent = `${game.streak}/${WIN_STREAK}`;
+  $('levelPill').textContent = `Palabras: ${game.correct} · ⚡×${pace().toFixed(1)}`;
+}
+
+function statsHtml() {
+  const attempts = game.correct + game.wrong;
+  const acc = attempts ? Math.round(game.correct / attempts * 100) : 0;
+  return [['Puntos', game.score], ['Correctas', game.correct], ['Precisión', acc + '%'], ['Mejor racha', game.bestStreak]]
+    .map(([k, v]) => `<div class="stat"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
+}
+function showEnd(title, msg, nextLabel) {
+  $('endTitle').textContent = title; $('endMsg').innerHTML = msg;
+  $('endStats').innerHTML = statsHtml();
+  const rev = [...game.review.values()].sort((a, b) => b.n - a.n);
+  $('reviewWrap').style.display = rev.length ? '' : 'none';
+  $('reviewList').innerHTML = rev.map(r => `<li><b>${esc(r.es)}</b> — ${esc(r.en)}</li>`).join('');
+  $('btnNext').textContent = nextLabel;
+  $('endOv').classList.remove('hidden');
+}
+function gameWon() {
+  mode = 'over'; updateHud(); sfx.level();
+  burst(frog.x, frog.y, ['#a6ff7a', '#ffe36b', '#2a5fd0', '#f08a1c', '#e0201b'], 60);
+  showEnd('¡Pura vida! 🐸🎉', `<b>${WIN_STREAK} correct words in a row!</b> Your rana calzonuda wins.`, 'Jugar otra vez');
+}
+function gameOver() {
+  mode = 'over'; sfx.over();
+  showEnd('¡Qué sal! 🐍', 'The bocaracá got you this time. ¡Intentalo otra vez!', 'Jugar otra vez');
+}
+$('btnNext').onclick = () => {
+  $('endOv').classList.add('hidden');
+  startGame();
+};
+$('btnMenu').onclick = toMenu;
+$('btnQuit').onclick = () => { $('pauseOv').classList.add('hidden'); toMenu(); };
+function toMenu() {
+  mode = 'menu'; $('endOv').classList.add('hidden'); $('menu').classList.remove('hidden');
+  hud.style.visibility = 'hidden'; insects = []; refreshMenu();
+}
+$('btnStart').onclick = startGame;
+$('btnPause').onclick = togglePause;
+$('btnStartle').onclick = doStartle;
+$('btnHint').onclick = doHint;
+cv.addEventListener('contextmenu', e => { e.preventDefault(); doStartle(); });
+$('btnResume').onclick = togglePause;
+$('btnSound').onclick = () => { soundOn = !soundOn; store.set('sound', soundOn); $('btnSound').textContent = soundOn ? '🔊' : '🔇'; if (!soundOn && 'speechSynthesis' in window) speechSynthesis.cancel(); };
+function togglePause() {
+  if (mode === 'play') { mode = 'pause'; $('pauseOv').classList.remove('hidden'); }
+  else if (mode === 'pause') { mode = 'play'; $('pauseOv').classList.add('hidden'); }
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'play') togglePause(); });
+
+/* =========================================================
+   INPUT
+   ========================================================= */
+/* Player control:
+   - Mouse: the frog hops toward the mouse pointer. Click = tongue.
+   - Touch: drag your finger and the frog follows. Quick tap = tongue.
+   - Arrow keys / WASD: hop. Space: tongue. */
+let downInfo = null;
+const TAP_MS = 220;
+cv.addEventListener('pointermove', e => {
+  pointer.x = e.clientX; pointer.y = e.clientY;
+  if (e.pointerType === 'mouse') { inputMode = 'mouse'; pointer.active = true; }
+});
+cv.addEventListener('pointerdown', e => {
+  audio();
+  if (e.button !== 0) return;
+  pointer.x = e.clientX; pointer.y = e.clientY;
+  if (e.pointerType === 'mouse') { inputMode = 'mouse'; pointer.active = true; shootTongue(e.clientX, e.clientY); return; }
+  try { cv.setPointerCapture(e.pointerId); } catch {}
+  inputMode = 'touch';
+  downInfo = { x: e.clientX, y: e.clientY, t: performance.now() };
+});
+function endPress(e) {
+  if (!downInfo) return;
+  const quick = performance.now() - downInfo.t < TAP_MS && Math.hypot(e.clientX - downInfo.x, e.clientY - downInfo.y) < 14;
+  downInfo = null; pointer.active = false;
+  if (quick) shootTongue(e.clientX, e.clientY);
+}
+cv.addEventListener('pointerup', endPress);
+cv.addEventListener('pointercancel', () => { downInfo = null; pointer.active = false; });
+// a press counts as "hold to move" once it lasts longer than a tap or drags
+function updatePress() {
+  if (downInfo && !pointer.active &&
+      (performance.now() - downInfo.t >= TAP_MS || Math.hypot(pointer.x - downInfo.x, pointer.y - downInfo.y) >= 14)) pointer.active = true;
+}
+window.addEventListener('keydown', e => {
+  if (e.target && e.target.tagName === 'TEXTAREA') return;
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'a', 'd', 'w', 's'].includes(k)) { keys.add(k); inputMode = 'keys'; e.preventDefault(); }
+  if (k === ' ') {
+    e.preventDefault();
+    if (mode === 'play') {
+      if (inputMode === 'mouse') shootTongue(pointer.x, pointer.y);
+      else {
+        let dx = 0, dy = 0;
+        if (keys.has('ArrowLeft') || keys.has('a')) dx--; if (keys.has('ArrowRight') || keys.has('d')) dx++;
+        if (keys.has('ArrowUp') || keys.has('w')) dy--; if (keys.has('ArrowDown') || keys.has('s')) dy++;
+        if (!dx && !dy) dx = frog.facing;
+        const m = mouthPos(); shootTongue(m.x + dx * 200, m.y + dy * 200);
+      }
+    }
+  }
+  if (k === 'Shift' || k === 'e') doStartle();
+  if (k === 'h') doHint();
+  if (k === 'p' || k === 'Escape') togglePause();
+  if (k === 'm') $('btnSound').click();
+  if (k === 'Enter' && mode === 'menu') startGame();
+});
+window.addEventListener('keyup', e => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; keys.delete(k); });
+window.addEventListener('blur', () => keys.clear());
+window.addEventListener('resize', () => { resize(); if (frog) { frog.x = clamp(frog.x, 30, W - 30); frog.y = clamp(frog.y, topY + 30, H - 30); } });
+
+/* =========================================================
+   LOOP
+   ========================================================= */
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt;
+  if (W !== window.innerWidth || H !== window.innerHeight || !bg.width) resize();
+  if (!bg.width || !bg.height) { requestAnimationFrame(loop); return; }
+  // re-measure the top bar every frame: if it wraps or grows, the forest starts below it
+  if (mode !== 'menu') measureHud();
+  updateAmbient(dt);
+  if (mode === 'play') {
+    updateFrog(dt);
+    if (mode === 'play') updateInsects(dt);
+    if (mode === 'play') updateSnake(dt);
+    updateFx(dt);
+    updateStartleBtn();
+  }
+  // draw
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.drawImage(bg, 0, 0, W, H);
+  drawAmbient(time);
+  if (game && mode !== 'menu') {
+    for (const i of insects) drawInsect(i, time);
+    drawSnake(time);
+    ctx.globalAlpha = 1;
+    drawFrog(time);
+    for (const i of insects) drawInsectLabel(i);
+    drawFx();
+  }
+  requestAnimationFrame(loop);
+}
+
+/* menu frog preview */
+const pv = $('frogPreview'), pctx = pv.getContext('2d');
+function drawPreview(t) {
+  pctx.clearRect(0, 0, pv.width, pv.height);
+  const hop = Math.max(0, Math.sin(t * 2.2));
+  pctx.save(); pctx.translate(150, 140 - hop * 26);
+  pctx.scale(1 + hop * 0.06, 1 - hop * 0.04);
+  drawFrogBody(pctx, 72, hop, (t % 3.2) < 0.12 ? 1 : 0, 0);
+  pctx.restore();
+  if (mode === 'menu') requestAnimationFrame(() => drawPreview(performance.now() / 1000));
+  else previewRunning = false;
+}
+let previewRunning = true;
+new MutationObserver(() => { if (!$('menu').classList.contains('hidden') && !previewRunning) { previewRunning = true; drawPreview(performance.now() / 1000); } })
+  .observe($('menu'), { attributes: true, attributeFilter: ['class'] });
+
+resize();
+drawPreview(0);
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
